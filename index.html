@@ -1,0 +1,671 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Speech Restoration Demo</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #222535;
+    --border: #2e3250;
+    --accent: #4f8ef7;
+    --accent2: #7c5ce0;
+    --text: #e8eaf0;
+    --text-muted: #8a8fa8;
+    --playing: #00d4aa;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  header {
+    background: linear-gradient(135deg, var(--surface) 0%, #1e2240 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 24px 32px 20px;
+  }
+  header h1 {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+    color: var(--text);
+  }
+  header p {
+    color: var(--text-muted);
+    margin-top: 4px;
+    font-size: 13px;
+  }
+  main {
+    padding: 24px 32px;
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+
+  /* ---- gradio section ---- */
+  #gradio-section {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  #gradio-inner {
+    margin: 0 auto;
+    padding: 0 32px;
+  }
+  #gradio-frame {
+    width: 100%;
+    height: 95vh;
+    border: none;
+    display: block;
+    background: transparent;
+  }
+
+  /* ---- demo divider ---- */
+  .demo-divider {
+    padding: 20px 32px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    border-top: 1px solid var(--border);
+    margin-top: 4px;
+  }
+
+  /* ---- sample section ---- */
+  .sample-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 28px;
+    overflow: hidden;
+  }
+  .sample-header {
+    padding: 12px 20px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sample-header span.name { color: var(--text); font-size: 13px; }
+
+  /* ---- table layout ---- */
+  .grid-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .grid-table th {
+    padding: 8px 12px;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+  }
+  .grid-table th.model-col { text-align: left; min-width: 110px; }
+  .grid-table td {
+    padding: 6px 8px;
+    vertical-align: top;
+    border-bottom: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+  }
+  .grid-table td:last-child { border-right: none; }
+  .grid-table tr:last-child td { border-bottom: none; }
+  .grid-table td.model-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+    vertical-align: middle;
+    padding-left: 14px;
+    white-space: nowrap;
+  }
+  .grid-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* ---- audio cell ---- */
+  .audio-cell {
+    position: relative;
+    min-width: 160px;
+  }
+  .spectrogram-wrap {
+    position: relative;
+    cursor: pointer;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #0a0c14;
+    height: 96px;
+    transition: box-shadow 0.15s;
+  }
+  .spectrogram-wrap:hover { box-shadow: 0 0 0 2px var(--accent); }
+  .spectrogram-wrap.playing { box-shadow: 0 0 0 2px var(--playing); }
+  .spectrogram-wrap canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .play-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    transition: opacity 0.15s;
+  }
+  .play-btn-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.18);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s, background 0.15s;
+  }
+  .spectrogram-wrap:hover .play-btn-icon {
+    background: rgba(79,142,247,0.55);
+    transform: scale(1.1);
+  }
+  .spectrogram-wrap.playing .play-btn-icon {
+    background: rgba(0,212,170,0.6);
+  }
+  .play-btn-icon svg { display: block; }
+  /* progress line */
+  .progress-line {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 2px;
+    background: var(--playing);
+    left: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.1s;
+    box-shadow: 0 0 6px var(--playing);
+  }
+  .spectrogram-wrap.playing .progress-line { opacity: 1; }
+
+  /* loading spinner */
+  .loading-msg {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+  .grid-table tr.input-row td { background: rgba(79,142,247,0.04); }
+
+  /* legend */
+  .legend {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Speech Restoration Demo</h1>
+  <p>Sebastian Braun, Microsoft Research, 2026.</p>
+  <p>This demonstrates our speech restoration model using mean flow-matching aimed for real-time processing. </p>
+</header>
+
+<div class="demo-divider">&#9660; Audio examples</div>
+
+<main>
+  <p style="margin-bottom:10px;color:var(--text-muted);font-size:13px;">Click a spectrogram to play / pause. NFE = Number of Function Evaluations.</p>
+  <table style="border-collapse:collapse;font-size:13px;color:var(--text-muted);margin-bottom:16px;">
+    <thead>
+      <tr>
+        <th style="text-align:left;padding:5px 14px 5px 0;border-bottom:1px solid rgba(255,255,255,0.1);white-space:nowrap;">Model</th>
+        <th style="text-align:left;padding:5px 14px 5px 0;border-bottom:1px solid rgba(255,255,255,0.1);">Type</th>
+        <th style="text-align:left;padding:5px 14px 5px 0;border-bottom:1px solid rgba(255,255,255,0.1);">Compute</th>
+        <th style="text-align:left;padding:5px 0 5px 0;border-bottom:1px solid rgba(255,255,255,0.1);">Algorithmic latency</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="padding:5px 14px 5px 0;white-space:nowrap;">NCSN++ acausal Flow Matching /w data prediction</td>
+        <td style="padding:5px 14px 5px 0;">upper bound</td>
+        <td style="padding:5px 14px 5px 0;">66.4 GMACs/sec</td>
+        <td style="padding:5px 0 5px 0;">&gt; 600 ms</td>
+      </tr>
+      <tr>
+        <td style="padding:5px 14px 5px 0;white-space:nowrap;">NCSN++ causal Flow Matching /w data prediction</td>
+        <td style="padding:5px 14px 5px 0;">Baseline</td>
+        <td style="padding:5px 14px 5px 0;">142.8 GMACs/sec</td>
+        <td style="padding:5px 0 5px 0;">20 ms</td>
+      </tr>
+      <tr>
+        <td style="padding:5px 14px 5px 0;white-space:nowrap;">ConvGLU1D Mean Flow Matching /w data prediction</td>
+        <td style="padding:5px 14px 5px 0;">older model</td>
+        <td style="padding:5px 14px 5px 0;">0.1 GMACs/sec</td>
+        <td style="padding:5px 0 5px 0;">20 ms </td>
+      </tr>
+      <tr>
+        <td style="padding:5px 14px 5px 0;white-space:nowrap;">RMFSR Mean Flow Matching /w data prediction</td>
+        <td style="padding:5px 14px 5px 0;">Proposed</td>
+        <td style="padding:5px 14px 5px 0;">1.2 GMACs/sec</td>
+        <td style="padding:5px 0 5px 0;">20 ms </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div id="legend" class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>Click spectrogram to play</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--playing)"></div>Currently playing</div>
+  </div>
+  <div id="app">Loading audio examples...</div>
+  <div id="protocol-warning" style="display:none;background:#5c1a1a;color:#ffb3b3;border:1px solid #a33;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;">
+    <strong>⚠ Opened via file://</strong> — browsers block local file requests from HTML pages.
+    Please serve via HTTP instead:<br>
+    <code style="background:#3a1010;padding:2px 6px;border-radius:4px;margin-top:6px;display:inline-block">python -m http.server 8765</code>
+    &nbsp;then open&nbsp;<a href="http://localhost:8765/index.html" style="color:#ffb3b3">http://localhost:8765/index.html</a>
+  </div>
+</main>
+
+<script>
+if (location.protocol === 'file:') {
+  document.getElementById('protocol-warning').style.display = 'block';
+}
+</script>
+
+<script>
+// == Configuration ==
+const MODELS = [
+  { label: 'Input',         folder: 'audio/nisqa_gold_files_16k',                                                         isInput: true  },
+  { label: 'NSCN++ acausal',        folder: 'audio/ncsnpp-v2-IP-DP-comp03-pink03-logitnormalmean-04lim-autoeq-ears',                     isInput: false },
+  { label: 'NSCN++ causal', folder: 'audio/ncsnpp-v2-causal-IP-DP-comp03-pink03-logitnormalmean-04lim-autoeq-ears', isInput: false },
+  { label: 'ConvGLU1D-DP-IMF', folder: 'audio/flow-streamformer-dil2-IP-DP-IMF-large-pink03-ears', isInput: false },
+  { label: 'RMFSR-DP-IMF', folder: 'audio/cruserflowattp256-d2-tcn4-IP-DP-IMF-pink03-logitnormalmean04lim-autoeq-ears', isInput: false },
+
+];
+const NFES = [1, 2, 5, 10, 20];
+const SAMPLES = [
+  'c00010_ref_t04_1_1600ms_split_6',
+  'ms_realrec_nonenglish_spanish_webcammicrophone_A1UQ1OURMB9IRJ_airconditioner_fileid_3',
+  '0-weu-d1-7b0a18159369f3f0355e73c9dfb5861b.1',
+  '5839d6dd-85ff-48b7-8f4b-bd1c5c40ceed',
+  'ms_realrec_nonenglish_italian_common_voice_it_17664501',
+  '5f48ec6c-1f9d-4f14-bbd5-6ce54ed8cefd_24k_mic',
+  '4d9694d3-9644-49d3-a22e-5f73220e5cd3_24k_mic',
+  'c00005_P501_C_english_m1_FB_48k',
+];
+const SAMPLE_LABELS = {
+  'c00010_ref_t04_1_1600ms_split_6':                           'Sample 1 (band-limitation, background noise)',
+  'ms_realrec_nonenglish_spanish_webcammicrophone_A1UQ1OURMB9IRJ_airconditioner_fileid_3': 'Sample 2 (distant sound, air conditioner)',
+  '0-weu-d1-7b0a18159369f3f0355e73c9dfb5861b.1':           'Sample 3 (band-limitation and processing artifacts)',  
+  '5839d6dd-85ff-48b7-8f4b-bd1c5c40ceed':                  'Sample 4 (reverb)',
+  'ms_realrec_nonenglish_italian_common_voice_it_17664501': 'Sample 5 (distortion)',
+  '5f48ec6c-1f9d-4f14-bbd5-6ce54ed8cefd_24k_mic':          'Sample 6 (frequency imbalance)',
+  '4d9694d3-9644-49d3-a22e-5f73220e5cd3_24k_mic':          'Sample 7 (wind noise, clipping, noise suppression)',
+  'c00005_P501_C_english_m1_FB_48k':                       'Sample 8 (very narrow bandwidth)',
+};
+
+// Exact input filenames (some have extra suffix like _1 not in the sample key)
+const INPUT_FILENAMES = {
+  'c00010_ref_t04_1_1600ms_split_6':                           'c00010_ref_t04_1_1600ms_split_6.wav',
+  'ms_realrec_nonenglish_spanish_webcammicrophone_A1UQ1OURMB9IRJ_airconditioner_fileid_3': 'ms_realrec_nonenglish_spanish_webcammicrophone_A1UQ1OURMB9IRJ_airconditioner_fileid_3.wav',
+  '0-weu-d1-7b0a18159369f3f0355e73c9dfb5861b.1':           '0-weu-d1-7b0a18159369f3f0355e73c9dfb5861b.1_1.wav',
+  '4d9694d3-9644-49d3-a22e-5f73220e5cd3_24k_mic':          '4d9694d3-9644-49d3-a22e-5f73220e5cd3_24k_mic.wav',
+  'c00005_P501_C_english_m1_FB_48k':                       'c00005_P501_C_english_m1_FB_48k.wav',
+  '5839d6dd-85ff-48b7-8f4b-bd1c5c40ceed':                  '5839d6dd-85ff-48b7-8f4b-bd1c5c40ceed.wav',
+  'ms_realrec_nonenglish_italian_common_voice_it_17664501': 'ms_realrec_nonenglish_italian_common_voice_it_17664501.wav',
+  '5f48ec6c-1f9d-4f14-bbd5-6ce54ed8cefd_24k_mic':          '5f48ec6c-1f9d-4f14-bbd5-6ce54ed8cefd_24k_mic.wav',
+};
+
+// Model files use the same stem as the input file (without .wav), e.g. stem_nfe5.wav
+function modelStem(sample) { return INPUT_FILENAMES[sample].replace(/\.wav$/i, ''); }
+
+function filePath(model, sample, nfe) {
+  if (model.isInput) return `${model.folder}/${INPUT_FILENAMES[sample]}`;
+  return `${model.folder}/${modelStem(sample)}_nfe${nfe}.wav`;
+}
+
+// == Shared AudioContext ==
+let audioCtx = null;
+function getACtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+// == Global playback state: only one cell active at a time ==
+let curSource    = null;
+let curWrap      = null;
+let curAnimId    = null;
+let curBtnIcon   = null;
+let curPlaySVG   = null;
+let curStartedAt = 0;
+let curDuration  = 1;
+
+function stopActive() {
+  if (curAnimId)  { cancelAnimationFrame(curAnimId); curAnimId = null; }
+  if (curSource)  { try { curSource.stop(); } catch(e) {} curSource = null; }
+  if (curWrap)    { curWrap.classList.remove('playing'); curWrap = null; }
+  if (curBtnIcon && curPlaySVG) curBtnIcon.innerHTML = curPlaySVG;
+  curBtnIcon = null; curPlaySVG = null;
+}
+
+// == Viridis-like color LUT (index 0-255 -> RGB bytes) ==
+const CC = new Uint8ClampedArray(256 * 3);
+(function () {
+  for (let v = 0; v < 256; v++) {
+    const t = v / 255;
+    let r, g, b;
+    if      (t < 0.25) { const s = t/0.25;        r=68+s*(59-68);   g=1+s*(82-1);     b=84+s*(139-84);   }
+    else if (t < 0.5)  { const s=(t-0.25)/0.25;   r=59+s*(33-59);   g=82+s*(144-82);  b=139+s*(141-139); }
+    else if (t < 0.75) { const s=(t-0.5)/0.25;    r=33+s*(94-33);   g=144+s*(201-144);b=141+s*(97-141);  }
+    else               { const s=(t-0.75)/0.25;   r=94+s*(253-94);  g=201+s*(231-201);b=97+s*(37-97);    }
+    CC[v*3]=Math.round(r); CC[v*3+1]=Math.round(g); CC[v*3+2]=Math.round(b);
+  }
+})();
+
+// == Radix-2 FFT magnitude ==
+function fftMagnitude(signal) {
+  const N = signal.length;
+  const re = new Float32Array(signal);
+  const im = new Float32Array(N);
+  let j = 0;
+  for (let i = 1; i < N; i++) {
+    let bit = N >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) { let t=re[i]; re[i]=re[j]; re[j]=t; t=im[i]; im[i]=im[j]; im[j]=t; }
+  }
+  for (let len = 2; len <= N; len <<= 1) {
+    const ang = -2*Math.PI/len;
+    const wRe = Math.cos(ang), wIm = Math.sin(ang);
+    for (let i = 0; i < N; i += len) {
+      let cRe=1, cIm=0;
+      for (let k = 0; k < len/2; k++) {
+        const uR=re[i+k], uI=im[i+k], h=i+k+len/2;
+        const vR=re[h]*cRe-im[h]*cIm, vI=re[h]*cIm+im[h]*cRe;
+        re[i+k]=uR+vR; im[i+k]=uI+vI; re[h]=uR-vR; im[h]=uI-vI;
+        const nc=cRe*wRe-cIm*wIm; cIm=cRe*wIm+cIm*wRe; cRe=nc;
+      }
+    }
+  }
+  const mag = new Float32Array(N/2);
+  for (let i=0; i<N/2; i++) mag[i]=Math.sqrt(re[i]*re[i]+im[i]*im[i])/(N/2);
+  return mag;
+}
+
+// == Draw full mel spectrogram from decoded AudioBuffer ==
+// Each canvas row maps linearly in mel scale between minHz and maxHz.
+// For each row we find which FFT bin(s) contribute via a triangular mel filterbank.
+function drawSpectrogram(canvas, audioBuf) {
+  const CW=canvas.width, CH=canvas.height;
+  const ctx=canvas.getContext('2d');
+  const imgData=ctx.createImageData(CW, CH);
+  const data=imgData.data;
+  const pcm=audioBuf.getChannelData(0);
+  const sr=audioBuf.sampleRate;
+  const N=1024;
+
+  // Hann window
+  const win=new Float32Array(N);
+  for (let i=0; i<N; i++) win[i]=0.5*(1-Math.cos(2*Math.PI*i/(N-1)));
+
+  // Mel ↔ Hz conversions (O'Shaughnessy formula)
+  const hz2mel = hz => 2595*Math.log10(1+hz/700);
+  const mel2hz = m  => 700*(Math.pow(10, m/2595)-1);
+
+  const minHz = 60;
+  const maxHz = Math.min(8000, sr/2);
+  const minMel = hz2mel(minHz);
+  const maxMel = hz2mel(maxHz);
+
+  // For each canvas row y (0=top=high freq, CH-1=bottom=low freq),
+  // compute the centre Hz and map to FFT bins with a triangular weight.
+  // We precompute per-row centre bins and weights once.
+  const N_BINS = N/2;
+  const binHz = b => b * sr / N;  // Hz of FFT bin b
+
+  // Build per-canvas-row filterbank: array of {bins[], weights[]}
+  const filters = new Array(CH);
+  for (let y=0; y<CH; y++) {
+    // linear in mel from bottom (low freq) to top (high freq)
+    const melFrac = (CH-1-y) / (CH-1);
+    const centerMel = minMel + melFrac*(maxMel-minMel);
+    const centerHz  = mel2hz(centerMel);
+    // bandwidth: half the distance to neighbours in mel space
+    const bwMel = (maxMel-minMel)/(CH-1);
+    const loHz  = mel2hz(centerMel - bwMel);
+    const hiHz  = mel2hz(centerMel + bwMel);
+
+    const bins=[], weights=[];
+    const bLo = Math.max(0, Math.floor(loHz*N/sr));
+    const bHi = Math.min(N_BINS-1, Math.ceil(hiHz*N/sr));
+    for (let b=bLo; b<=bHi; b++) {
+      const bh = binHz(b);
+      let w;
+      if (bh <= loHz || bh >= hiHz) { w=0; }
+      else if (bh <= centerHz)      { w=(bh-loHz)/(centerHz-loHz); }
+      else                           { w=(hiHz-bh)/(hiHz-centerHz); }
+      if (w>0) { bins.push(b); weights.push(w); }
+    }
+    // fallback: nearest bin if filter is empty (very narrow rows)
+    if (bins.length===0) {
+      const b=Math.min(N_BINS-1, Math.round(centerHz*N/sr));
+      bins.push(b); weights.push(1);
+    }
+    filters[y]={bins, weights};
+  }
+
+  // STFT over time
+  const hop=Math.max(1, Math.floor(pcm.length/CW));
+  const frame=new Float32Array(N);
+  const allCols=[];
+  let gMax=-Infinity;
+  for (let col=0; col<CW; col++) {
+    const center=col*hop;
+    for (let i=0; i<N; i++) { const idx=center-N/2+i; frame[i]=(idx>=0&&idx<pcm.length)?pcm[idx]*win[i]:0; }
+    const mag=fftMagnitude(frame);
+    // Apply filterbank → one mel energy value per row
+    const melDb=new Float32Array(CH);
+    for (let y=0; y<CH; y++) {
+      const {bins, weights}=filters[y];
+      let energy=0, wSum=0;
+      for (let k=0; k<bins.length; k++) { energy+=mag[bins[k]]*weights[k]; wSum+=weights[k]; }
+      melDb[y]=20*Math.log10((wSum>0?energy/wSum:0)+1e-9);
+      if (melDb[y]>gMax) gMax=melDb[y];
+    }
+    allCols.push(melDb);
+  }
+  const gMin=gMax-80;
+  for (let col=0; col<CW; col++) {
+    const melDb=allCols[col];
+    for (let y=0; y<CH; y++) {
+      const t=Math.max(0,Math.min(255,Math.round(255*(melDb[y]-gMin)/(gMax-gMin))));
+      const px=(y*CW+col)*4;
+      data[px]=CC[t*3]; data[px+1]=CC[t*3+1]; data[px+2]=CC[t*3+2]; data[px+3]=255;
+    }
+  }
+  ctx.putImageData(imgData, 0, 0);
+}
+
+// == Load audio via XHR (works under file:// for local subdirectory files) ==
+const bufCache = new Map();
+function loadBuffer(url) {
+  if (bufCache.has(url)) return Promise.resolve(bufCache.get(url));
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.responseType = 'arraybuffer';
+    xhr.onload = () => {
+      getACtx().decodeAudioData(xhr.response)
+        .then(buf => { bufCache.set(url, buf); resolve(buf); })
+        .catch(reject);
+    };
+    xhr.onerror = () => reject(new Error('XHR failed: ' + url));
+    xhr.send();
+  });
+}
+
+// == Build one spectrogram + playback cell ==
+function buildCell(audioPath) {
+  const td = document.createElement('td');
+  td.className = 'audio-cell';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'spectrogram-wrap';
+
+  const CW=260, CH=90;
+  const canvas = document.createElement('canvas');
+  canvas.width=CW; canvas.height=CH;
+  wrap.appendChild(canvas);
+
+  const PLAY_SVG  = '<svg width="12" height="14" viewBox="0 0 12 14" fill="white"><polygon points="0,0 12,7 0,14"/></svg>';
+  const PAUSE_SVG = '<svg width="12" height="14" viewBox="0 0 12 14" fill="white"><rect x="0" y="0" width="4" height="14"/><rect x="8" y="0" width="4" height="14"/></svg>';
+
+  const loadMsg = document.createElement('div');
+  loadMsg.className = 'loading-msg';
+  loadMsg.textContent = 'loading...';
+  wrap.appendChild(loadMsg);
+
+  const overlay = document.createElement('div'); overlay.className = 'play-overlay';
+  const btnIcon = document.createElement('div'); btnIcon.className = 'play-btn-icon';
+  btnIcon.innerHTML = PLAY_SVG;
+  overlay.appendChild(btnIcon);
+  wrap.appendChild(overlay);
+
+  const cursor = document.createElement('div'); cursor.className = 'progress-line';
+  wrap.appendChild(cursor);
+
+  td.appendChild(wrap);
+
+  let audioBuf = null;
+  const loadPromise = loadBuffer(audioPath)
+    .then(buf => {
+      audioBuf = buf;
+      loadMsg.remove();
+      setTimeout(() => drawSpectrogram(canvas, buf), 0);
+    })
+    .catch(err => {
+      console.warn('Failed to load audio:', audioPath, err);
+      loadMsg.textContent = 'Audio Not Available';
+      loadMsg.style.color = '#f66';
+      loadMsg.style.fontSize = '10px';
+    });
+
+  function animateCursor(startedAt, duration) {
+    const elapsed = getACtx().currentTime - startedAt;
+    const frac = Math.min(1, elapsed / duration);
+    cursor.style.left = (frac * 100) + '%';
+    if (frac < 1 && curWrap === wrap) {
+      curAnimId = requestAnimationFrame(() => animateCursor(startedAt, duration));
+    }
+  }
+
+  wrap.addEventListener('click', async () => {
+    await loadPromise;
+    if (!audioBuf) return;
+
+    const actx = getACtx();
+    if (actx.state === 'suspended') await actx.resume();
+
+    const isActive = curWrap === wrap;
+    stopActive();
+    if (isActive) return;
+
+    const source = actx.createBufferSource();
+    source.buffer = audioBuf;
+    source.connect(actx.destination);
+    source.start();
+
+    curSource    = source;
+    curWrap      = wrap;
+    curBtnIcon   = btnIcon;
+    curPlaySVG   = PLAY_SVG;
+    curStartedAt = actx.currentTime;
+    curDuration  = audioBuf.duration;
+    wrap.classList.add('playing');
+    btnIcon.innerHTML = PAUSE_SVG;
+
+    source.onended = () => { if (curSource === source) stopActive(); };
+    curAnimId = requestAnimationFrame(() => animateCursor(curStartedAt, curDuration));
+  });
+
+  return td;
+}
+
+// == Build full demo ==
+function buildDemo() {
+  const app = document.getElementById('app');
+  app.innerHTML = '';
+  for (const sample of SAMPLES) {
+    const section = document.createElement('div');
+    section.className = 'sample-section';
+    const hdr = document.createElement('div');
+    hdr.className = 'sample-header';
+    hdr.innerHTML = `<span>Sample:</span><span class="name">${SAMPLE_LABELS[sample] || sample}</span>`;
+    section.appendChild(hdr);
+
+    const table = document.createElement('table');
+    table.className = 'grid-table';
+    const thead = document.createElement('thead');
+    const headRow = document.createElement('tr');
+    const thM = document.createElement('th'); thM.className = 'model-col'; thM.textContent = 'Model';
+    headRow.appendChild(thM);
+    for (const nfe of NFES) {
+      const th = document.createElement('th'); th.textContent = `NFE = ${nfe}`; headRow.appendChild(th);
+    }
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    for (const model of MODELS) {
+      const tr = document.createElement('tr');
+      if (model.isInput) tr.className = 'input-row';
+      const tdLabel = document.createElement('td'); tdLabel.className = 'model-label';
+      tdLabel.textContent = model.label;
+      tr.appendChild(tdLabel);
+      if (model.isInput) {
+        const td = buildCell(filePath(model, sample, null));
+        tr.appendChild(td);
+        const filler = document.createElement('td');
+        filler.colSpan = NFES.length - 1;
+        tr.appendChild(filler);
+      } else {
+        for (const nfe of NFES) {
+          tr.appendChild(buildCell(filePath(model, sample, nfe)));
+        }
+      }
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+    section.appendChild(table);
+    app.appendChild(section);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', buildDemo);
+</script>
+</body>
+</html>
